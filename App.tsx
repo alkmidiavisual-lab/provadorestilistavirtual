@@ -12,6 +12,18 @@ import {
 } from './services/geminiService.ts';
 import { ImageState } from './types.ts';
 
+// Extensão global para tipos do AI Studio
+declare global {
+    interface AIStudio {
+        hasSelectedApiKey: () => Promise<boolean>;
+        openSelectKey: () => Promise<void>;
+    }
+    interface Window {
+        // Remove readonly to match environment expectations and avoid modifier mismatch errors
+        aistudio?: AIStudio;
+    }
+}
+
 const SCENARIOS = [
     "Loft Industrial NY", "Praia Pôr do Sol", "Cyberpunk Tóquio", 
     "Estúdio Europeu", "Luxo em Mônaco", "Paris no Outono", 
@@ -30,6 +42,8 @@ const App: React.FC = () => {
     const [selectedScenario, setSelectedScenario] = useState(SCENARIOS[0]);
     const [customScenario, setCustomScenario] = useState("");
     const [selectedAngle, setSelectedAngle] = useState(ANGLES[0]);
+    
+    const [isProMode, setIsProMode] = useState(false);
     
     const [tryOnImage, setTryOnImage] = useState<string | null>(null);
     const [isTryingOn, setIsTryingOn] = useState(false);
@@ -51,6 +65,25 @@ const App: React.FC = () => {
         setSelectedAngle(ANGLES[0]);
     };
 
+    const toggleProMode = async () => {
+        if (!isProMode) {
+            // Verifica se estamos no ambiente AI Studio antes de chamar as funções de chave
+            if (window.aistudio) {
+                try {
+                    const hasKey = await window.aistudio.hasSelectedApiKey();
+                    if (!hasKey) {
+                        await window.aistudio.openSelectKey();
+                    }
+                } catch (err) {
+                    console.warn("AI Studio Key selection not available in this environment.");
+                }
+            }
+            setIsProMode(true);
+        } else {
+            setIsProMode(false);
+        }
+    };
+
     const openPreview = (url: string, filename: string) => {
         setPreviewImageUrl(url);
         setPreviewFilename(filename);
@@ -64,21 +97,32 @@ const App: React.FC = () => {
             const b64P = await fileToBase64(personImage.file);
             const b64O = await fileToBase64(outfitImage.file);
             const scenario = customScenario || selectedScenario;
+            
             const result = await getTryOnImage(
                 { mimeType: personImage.file.type, data: b64P }, 
                 { mimeType: outfitImage.file.type, data: b64O }, 
                 scenario,
-                angle
+                angle,
+                isProMode
             );
+            
             setTryOnImage(result);
             setHistory(prev => [result, ...prev].slice(0, 15));
             
             if (previewImageUrl) {
                 setPreviewImageUrl(result);
             }
-        } catch (e) {
-            console.error(e);
-            alert("Erro na geração. Verifique sua conexão e tente novamente.");
+        } catch (e: any) {
+            console.error("Erro detalhado da geração:", e);
+            
+            if (e.message === "KEY_REQUIRED" && window.aistudio) {
+                await window.aistudio.openSelectKey();
+                handleTryOn(angle);
+            } else if (e.message.includes("403") || e.message.includes("API key not valid")) {
+                alert("Erro de API: Verifique se a chave de API foi configurada corretamente no seu painel de controle.");
+            } else {
+                alert("Erro na geração. Verifique sua conexão ou se a chave de API está ativa no Netlify.");
+            }
         } finally {
             setIsTryingOn(false);
         }
@@ -92,7 +136,11 @@ const App: React.FC = () => {
                     const b64O = await fileToBase64(outfitImage.file);
                     const result = await getOutfitOnBedImage({ mimeType: outfitImage.file.type, data: b64O });
                     setOutfitOnBedImage(result);
-                } catch (e) {} finally { setIsGeneratingOutfitOnBed(false); }
+                } catch (e) {
+                    console.error("Erro ao gerar Flatlay:", e);
+                } finally { 
+                    setIsGeneratingOutfitOnBed(false); 
+                }
             })();
         }
     }, [outfitImage]);
@@ -100,9 +148,18 @@ const App: React.FC = () => {
     return (
         <div className="min-h-screen p-4 sm:p-8 max-w-7xl mx-auto flex flex-col bg-transparent">
             <header className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
-                <div>
+                <div className="flex flex-col items-center md:items-start">
                     <h1 className="text-4xl sm:text-6xl font-black italic tracking-tighter text-[#00ffcc] leading-none text-center md:text-left">ULTRA-POSTER</h1>
-                    <p className="text-[10px] uppercase tracking-[0.4em] font-bold opacity-40 mt-2 text-center md:text-left">IA Creative Engine • Public Version</p>
+                    <div className="flex items-center gap-4 mt-2">
+                        <p className="text-[10px] uppercase tracking-[0.4em] font-bold opacity-40">IA Creative Engine</p>
+                        <div className="h-4 w-[1px] bg-white/10 hidden sm:block"></div>
+                        <button 
+                            onClick={toggleProMode}
+                            className={`text-[9px] font-black tracking-widest px-3 py-1 rounded-full border transition-all ${isProMode ? 'bg-amber-400 border-amber-500 text-black animate-pulse shadow-[0_0_15px_rgba(251,191,36,0.5)]' : 'bg-white/5 border-white/10 text-white/40'}`}
+                        >
+                            {isProMode ? 'MODO ULTRA 4K ATIVO' : 'ATIVAR MODO ULTRA (PRO)'}
+                        </button>
+                    </div>
                 </div>
                 <button onClick={() => setIsHistoryVisible(true)} className="bg-white/5 p-4 rounded-2xl border border-white/10 flex items-center gap-2 hover:bg-white/10 transition-all group">
                     <HistoryIcon /><span className="text-[10px] font-black tracking-widest uppercase group-hover:text-[#00ffcc]">Galeria de Sessão</span>
@@ -139,8 +196,8 @@ const App: React.FC = () => {
                             <textarea 
                                 value={customScenario}
                                 onChange={(e) => setCustomScenario(e.target.value)}
-                                placeholder="Descreva um lugar único..."
-                                className="w-full bg-black/60 border border-white/10 rounded-xl p-4 text-sm focus:border-[#00ffcc] outline-none text-white transition-all resize-none"
+                                placeholder="Ex: 'Iate de luxo em Dubai ao pôr do sol, estilo editorial vogue'..."
+                                className="w-full bg-black/60 border border-white/10 rounded-xl p-4 text-sm focus:border-[#00ffcc] outline-none text-white transition-all resize-none placeholder:opacity-20"
                                 rows={2}
                             />
                         </div>
@@ -150,9 +207,9 @@ const App: React.FC = () => {
                         <button 
                             onClick={() => handleTryOn()} 
                             disabled={isTryingOn} 
-                            className="main-button w-full py-6 text-xl rounded-2xl"
+                            className={`main-button w-full py-6 text-xl rounded-2xl ${isProMode ? 'from-amber-400 to-orange-600 shadow-amber-900/40' : ''}`}
                         >
-                            {isTryingOn ? 'PROCESSANDO...' : 'GERAR POSTER HD'}
+                            {isTryingOn ? 'RENDERIZANDO PIXELS...' : isProMode ? 'GERAR POSTER MASTERPIECE 4K' : 'GERAR POSTER HD'}
                         </button>
                     )}
                 </div>
@@ -190,8 +247,13 @@ const App: React.FC = () => {
                 onAngleChange={handleTryOn}
             />
             
-            <footer className="mt-12 py-6 border-t border-white/5 text-center">
-                <p className="text-[9px] uppercase tracking-[0.5em] opacity-30 font-bold">Ultra-Poster © 2025 • Powered by Google Gemini</p>
+            <footer className="mt-12 py-6 border-t border-white/5 text-center flex flex-col items-center gap-2">
+                <p className="text-[9px] uppercase tracking-[0.5em] opacity-30 font-bold">Ultra-Poster © 2025 • High Fashion AI Engine</p>
+                <div className="flex gap-4 opacity-20 text-[8px] font-bold tracking-widest">
+                    <span>GEMINI 2.5 FLASH</span>
+                    <span>GEMINI 3 PRO 4K</span>
+                    <span>EDITORIAL MODE</span>
+                </div>
             </footer>
         </div>
     );
