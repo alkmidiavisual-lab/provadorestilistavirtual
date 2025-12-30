@@ -1,10 +1,15 @@
-
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ULTRA-POSTER | IA Fashion Engine</title>
+    
+    <!-- Script de compatibilidade para variáveis de ambiente no frontend -->
+    <script>
+      window.process = { env: { API_KEY: undefined } };
+    </script>
+
     <script type="importmap">
     {
       "imports": {
@@ -35,7 +40,37 @@
             color: #fff;
             margin: 0;
             overflow-x: hidden;
+            position: relative;
         }
+
+        /* --- Bubble Effect --- */
+        .neon-bubble {
+            position: fixed;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(0, 255, 204, 0.2) 0%, rgba(0, 153, 255, 0) 70%);
+            border-radius: 50%;
+            z-index: -1;
+            filter: blur(60px);
+            animation: float-bubble 20s infinite alternate ease-in-out;
+            pointer-events: none;
+        }
+
+        .bubble-2 {
+            width: 450px;
+            height: 450px;
+            background: radial-gradient(circle, rgba(255, 0, 255, 0.1) 0%, rgba(0, 0, 0, 0) 70%);
+            right: -100px;
+            top: 20%;
+            animation-delay: -5s;
+        }
+
+        @keyframes float-bubble {
+            0% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(10vw, 15vh) scale(1.2); }
+            100% { transform: translate(-5vw, 30vh) scale(0.8); }
+        }
+        /* ------------------- */
 
         .card {
             background: var(--card-bg);
@@ -66,10 +101,8 @@
             box-shadow: 0 0 40px rgba(0, 255, 204, 0.4);
         }
 
-        /* Previne o flash branco no carregamento */
-        #root { min-height: 100vh; background: var(--bg-dark); }
+        #root { min-height: 100vh; background: var(--bg-dark); position: relative; z-index: 1; }
         
-        /* Custom scrollbar */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #000; }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
@@ -77,6 +110,10 @@
     </style>
 </head>
 <body>
+    <!-- Bubbles Decorativas -->
+    <div class="neon-bubble"></div>
+    <div class="neon-bubble bubble-2"></div>
+    
     <div id="root"></div>
     <script type="module" src="index.tsx"></script>
 </body>

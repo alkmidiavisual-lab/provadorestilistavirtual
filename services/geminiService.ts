@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, SafetySetting, HarmCategory, HarmBlockThreshold } from "@google/genai";
 
 const safetySettings: SafetySetting[] = [
@@ -18,9 +17,12 @@ export const fileToBase64 = (file: File): Promise<string> => {
 };
 
 const getApiKey = () => {
-    // Tenta obter de várias formas comuns em builds de frontend
+    // Busca a chave na variável de ambiente global injetada
+    // Se estiver no Netlify, você deve configurar API_KEY no painel do site
     const key = process.env.API_KEY;
+    
     if (!key || key === "undefined" || key === "") {
+        console.error("ERRO CRÍTICO: API_KEY não configurada no ambiente.");
         throw new Error("MISSING_API_KEY");
     }
     return key;
@@ -35,6 +37,7 @@ const generateHighQualityImage = async (
         const apiKey = getApiKey();
         const ai = new GoogleGenAI({ apiKey });
         
+        // Seleção dinâmica do modelo conforme especificado nas diretrizes
         const modelName = isProMode ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
         
         const superCleanBoost = isProMode 
@@ -72,7 +75,7 @@ const generateHighQualityImage = async (
             throw error;
         }
         
-        if (error.message?.includes("Requested entity was not found")) {
+        if (error.message?.includes("Requested entity was not found") || error.message?.includes("API key not found")) {
             throw new Error("KEY_REQUIRED");
         }
         throw error;
