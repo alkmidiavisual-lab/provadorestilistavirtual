@@ -19,7 +19,6 @@ declare global {
         openSelectKey: () => Promise<void>;
     }
     interface Window {
-        // Remove readonly to match environment expectations and avoid modifier mismatch errors
         aistudio?: AIStudio;
     }
 }
@@ -67,7 +66,6 @@ const App: React.FC = () => {
 
     const toggleProMode = async () => {
         if (!isProMode) {
-            // Verifica se estamos no ambiente AI Studio antes de chamar as funções de chave
             if (window.aistudio) {
                 try {
                     const hasKey = await window.aistudio.hasSelectedApiKey();
@@ -75,7 +73,7 @@ const App: React.FC = () => {
                         await window.aistudio.openSelectKey();
                     }
                 } catch (err) {
-                    console.warn("AI Studio Key selection not available in this environment.");
+                    console.warn("AI Studio Key selection not available.");
                 }
             }
             setIsProMode(true);
@@ -113,15 +111,17 @@ const App: React.FC = () => {
                 setPreviewImageUrl(result);
             }
         } catch (e: any) {
-            console.error("Erro detalhado da geração:", e);
+            console.error("Erro na geração:", e);
             
-            if (e.message === "KEY_REQUIRED" && window.aistudio) {
+            if (e.message === "MISSING_API_KEY") {
+                alert("CONFIGURAÇÃO NECESSÁRIA: A variável API_KEY não foi encontrada. No Netlify, vá em 'Site Settings' > 'Environment variables' e adicione a sua chave do Google Gemini como API_KEY.");
+            } else if (e.message === "KEY_REQUIRED" && window.aistudio) {
                 await window.aistudio.openSelectKey();
                 handleTryOn(angle);
             } else if (e.message.includes("403") || e.message.includes("API key not valid")) {
-                alert("Erro de API: Verifique se a chave de API foi configurada corretamente no seu painel de controle.");
+                alert("CHAVE INVÁLIDA: A chave de API fornecida não é válida ou não tem permissões para este modelo.");
             } else {
-                alert("Erro na geração. Verifique sua conexão ou se a chave de API está ativa no Netlify.");
+                alert("ERRO DE CONEXÃO OU COTA: O Google pode estar sobrecarregado ou sua cota gratuita acabou. Tente novamente em alguns segundos ou use o Modo Standard.");
             }
         } finally {
             setIsTryingOn(false);
@@ -137,7 +137,7 @@ const App: React.FC = () => {
                     const result = await getOutfitOnBedImage({ mimeType: outfitImage.file.type, data: b64O });
                     setOutfitOnBedImage(result);
                 } catch (e) {
-                    console.error("Erro ao gerar Flatlay:", e);
+                    console.error("Erro ao gerar detalhamento:", e);
                 } finally { 
                     setIsGeneratingOutfitOnBed(false); 
                 }
@@ -207,9 +207,14 @@ const App: React.FC = () => {
                         <button 
                             onClick={() => handleTryOn()} 
                             disabled={isTryingOn} 
-                            className={`main-button w-full py-6 text-xl rounded-2xl ${isProMode ? 'from-amber-400 to-orange-600 shadow-amber-900/40' : ''}`}
+                            className={`main-button w-full py-6 text-xl rounded-2xl transition-all ${isProMode ? 'from-amber-400 to-orange-600 shadow-amber-900/40' : ''}`}
                         >
-                            {isTryingOn ? 'RENDERIZANDO PIXELS...' : isProMode ? 'GERAR POSTER MASTERPIECE 4K' : 'GERAR POSTER HD'}
+                            {isTryingOn ? (
+                                <span className="flex items-center justify-center gap-4">
+                                    <span className="animate-spin h-5 w-5 border-2 border-black border-t-transparent rounded-full"></span>
+                                    PROCESSANDO POSTER...
+                                </span>
+                            ) : isProMode ? 'GERAR MASTERPIECE 4K' : 'GERAR POSTER HD'}
                         </button>
                     )}
                 </div>

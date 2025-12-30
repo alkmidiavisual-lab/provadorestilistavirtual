@@ -17,21 +17,30 @@ export const fileToBase64 = (file: File): Promise<string> => {
     });
 };
 
+const getApiKey = () => {
+    // Tenta obter de várias formas comuns em builds de frontend
+    const key = process.env.API_KEY;
+    if (!key || key === "undefined" || key === "") {
+        throw new Error("MISSING_API_KEY");
+    }
+    return key;
+};
+
 const generateHighQualityImage = async (
     prompt: string, 
     images: { mimeType: string; data: string }[],
     isProMode: boolean = false
 ): Promise<string> => {
-    // Sempre criamos uma nova instância para garantir o uso da chave mais recente (especialmente no modo Pro)
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    
-    const modelName = isProMode ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
-    
-    const superCleanBoost = isProMode 
-        ? ", photorealistic masterpiece, shot on 35mm lens, f/1.8, extremely detailed skin texture, high-end fashion magazine quality, 4k resolution, ray tracing, volumetric lighting, hyper-realistic garment physics."
-        : ", high-end fashion editorial photography, ultra-realistic, 8k resolution, sharp focus, cinematic lighting, NO TEXT, NO WORDS, preserve original garment textures.";
-
     try {
+        const apiKey = getApiKey();
+        const ai = new GoogleGenAI({ apiKey });
+        
+        const modelName = isProMode ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
+        
+        const superCleanBoost = isProMode 
+            ? ", photorealistic masterpiece, shot on 35mm lens, f/1.8, extremely detailed skin texture, high-end fashion magazine quality, 4k resolution, ray tracing, volumetric lighting, hyper-realistic garment physics."
+            : ", high-end fashion editorial photography, ultra-realistic, 8k resolution, sharp focus, cinematic lighting, NO TEXT, NO WORDS, preserve original garment textures.";
+
         const response = await ai.models.generateContent({
             model: modelName,
             contents: { 
@@ -43,7 +52,6 @@ const generateHighQualityImage = async (
             config: {
                 imageConfig: {
                     aspectRatio: "3:4",
-                    // imageSize só é suportado no Gemini 3 Pro Image
                     ...(isProMode ? { imageSize: "2K" } : {})
                 }
             },
@@ -59,6 +67,11 @@ const generateHighQualityImage = async (
         throw new Error("Erro ao extrair imagem da resposta.");
     } catch (error: any) {
         console.error("Image Gen Error:", error);
+        
+        if (error.message === "MISSING_API_KEY") {
+            throw error;
+        }
+        
         if (error.message?.includes("Requested entity was not found")) {
             throw new Error("KEY_REQUIRED");
         }
@@ -90,5 +103,5 @@ export const getTryOnImage = (
 
 export const getOutfitOnBedImage = (outfitImage: {mimeType: string, data: string}) => {
     const prompt = `Premium Flat Lay Photography: The original clothing item from the image must be perfectly FOLDED and ORGANIZED on a luxury bed with high-quality white linen. Soft studio lighting. Show only the clothing product, no people. ABSOLUTELY NO TEXT OR LETTERS ON THE IMAGE.`;
-    return generateHighQualityImage(prompt, [outfitImage], false); // Flatlay sempre no modo rápido
+    return generateHighQualityImage(prompt, [outfitImage], false);
 };
